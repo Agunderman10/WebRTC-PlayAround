@@ -40,7 +40,6 @@ class ScreenSharing extends LitElement {
 @import "../../../css/main.css";
 :host {
   display: block;
-  padding: 10px;
   width: 100%;
   height: 100%;
 }
