@@ -91,13 +91,19 @@ async function call() {
   }
   
 //   const configuration = getSelectedSdpSemantics();
-  const configuration1 = { 
-         "iceServers": [{ "url": "http://localhost:9000/" }] 
-  }; 
-  
-  const configuration2 = { 
-         "iceServers": [{ "url": "stun:stun2.l.google.com:19302" }] 
-  }; 
+var configuration = { iceServers: [{
+                          urls: "stun:stun.services.mozilla.com",
+                          username: "louis@mozilla.com", 
+                          credential: "webrtcdemo"
+                      }, {
+                          urls: [
+                                  "stun:stun.example.com",
+                                  "stun:stun-1.example.com"
+                          ]
+                      }]
+};
+
+var pc = new RTCPeerConnection(configuration);
   
   console.log('RTCPeerConnection configuration1:', configuration1);
   console.log('RTCPeerConnection configuration2:', configuration2);
