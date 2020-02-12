@@ -103,18 +103,17 @@ var configuration = { iceServers: [{
                       }]
 };
 
-var pc = new RTCPeerConnection(configuration);
+  var pc = new RTCPeerConnection(configuration);
   
-  console.log('RTCPeerConnection configuration1:', configuration1);
-  console.log('RTCPeerConnection configuration2:', configuration2);
+  console.log('RTCPeerConnection configuration:', configuration);
   
-  pc1 = new RTCPeerConnection(configuration1);
+  pc1 = new RTCPeerConnection(configuration);
   console.log('Created local peer connection object pc1');
   
   pc1.addEventListener('icecandidate', e => onIceCandidate(pc1, e));
   pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc1, e));
   
-  pc2 = new RTCPeerConnection(configuration2);
+  pc2 = new RTCPeerConnection(configuration);
   console.log('Created remote peer connection object pc2');
   
   pc2.addEventListener('icecandidate', e => onIceCandidate(pc2, e));
