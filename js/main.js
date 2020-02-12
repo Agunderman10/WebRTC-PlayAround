@@ -89,15 +89,30 @@ async function call() {
   if (audioTracks.length > 0) {
     console.log(`Using audio device: ${audioTracks[0].label}`);
   }
-  const configuration = getSelectedSdpSemantics();
+  
+//   const configuration = getSelectedSdpSemantics();
+  const configuration = { iceServers: [{
+                          urls: "stun:stun.services.mozilla.com",
+                          username: "louis@mozilla.com", 
+                          credential: "webrtcdemo"
+                      }, {
+                          urls: [
+                                  "stun:stun.example.com",
+                                  "stun:stun-1.example.com"
+                          ]
+                      }]
+};
   console.log('RTCPeerConnection configuration:', configuration);
+  
   pc1 = new RTCPeerConnection(configuration);
   console.log('Created local peer connection object pc1');
   pc1.addEventListener('icecandidate', e => onIceCandidate(pc1, e));
+  pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc1, e));
+  
   pc2 = new RTCPeerConnection(configuration);
   console.log('Created remote peer connection object pc2');
+  
   pc2.addEventListener('icecandidate', e => onIceCandidate(pc2, e));
-  pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc1, e));
   pc2.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc2, e));
   pc2.addEventListener('track', gotRemoteStream);
 
