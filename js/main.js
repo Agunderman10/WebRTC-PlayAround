@@ -1,239 +1,142 @@
-/*
- *  Copyright (c) 2015 The WebRTC project authors. All Rights Reserved.
- *
- *  Use of this source code is governed by a BSD-style license
- *  that can be found in the LICENSE file in the root of the source
- *  tree.
- */
-
-'use strict';
-
-const startButton = document.getElementById('startButton');
-const callButton = document.getElementById('callButton');
-const hangupButton = document.getElementById('hangupButton');
-callButton.disabled = true;
-hangupButton.disabled = true;
-startButton.addEventListener('click', start);
-callButton.addEventListener('click', call);
-hangupButton.addEventListener('click', hangup);
-
-let startTime;
-const localVideo = document.getElementById('localVideo');
-const remoteVideo = document.getElementById('remoteVideo');
-
-localVideo.addEventListener('loadedmetadata', function() {
-  console.log(`Local video videoWidth: ${this.videoWidth}px,  videoHeight: ${this.videoHeight}px`);
+var connection = new WebSocket('ws://localhost:9090'); 
+var name = ""; 
+ 
+var loginInput = document.querySelector('#loginInput'); 
+var loginBtn = document.querySelector('#loginBtn'); 
+var otherUsernameInput = document.querySelector('#otherUsernameInput'); 
+var connectToOtherUsernameBtn = document.querySelector('#connectToOtherUsernameBtn'); 
+var connectedUser, myConnection;
+  
+//when a user clicks the login button 
+loginBtn.addEventListener("click", function(event){ 
+   name = loginInput.value; 
+	
+   if(name.length > 0){ 
+      send({ 
+         type: "login", 
+         name: name 
+      }); 
+   } 
+	
 });
+  
+//handle messages from the server 
+connection.onmessage = function (message) { 
+   console.log("Got message", message.data);
+   var data = JSON.parse(message.data); 
+	
+   switch(data.type) { 
+      case "login": 
+         onLogin(data.success); 
+         break; 
+      case "offer": 
+         onOffer(data.offer, data.name); 
+         break; 
+      case "answer": 
+         onAnswer(data.answer); 
+         break; 
+      case "candidate": 
+         onCandidate(data.candidate); 
+         break; 
+      default: 
+         break; 
+   } 
+};
+  
+//when a user logs in 
+function onLogin(success) { 
 
-remoteVideo.addEventListener('loadedmetadata', function() {
-  console.log(`Remote video videoWidth: ${this.videoWidth}px,  videoHeight: ${this.videoHeight}px`);
-});
+   if (success === false) { 
+      alert("oops...try a different username"); 
+   } else { 
+      //creating our RTCPeerConnection object 
+		
+      var configuration = { 
+         "iceServers": [{ "url": "stun:stun.1.google.com:19302" }] 
+      }; 
+		
+      myConnection = new webkitRTCPeerConnection(configuration); 
+      console.log("RTCPeerConnection object was created"); 
+      console.log(myConnection); 
+  
+      //setup ice handling
+      //when the browser finds an ice candidate we send it to another peer 
+      myConnection.onicecandidate = function (event) { 
+		
+         if (event.candidate) { 
+            send({ 
+               type: "candidate", 
+               candidate: event.candidate 
+            }); 
+         } 
+      }; 
+   } 
+};
+  
+connection.onopen = function () { 
+   console.log("Connected"); 
+};
+  
+connection.onerror = function (err) { 
+   console.log("Got error", err); 
+};
+  
+// Alias for sending messages in JSON format 
+function send(message) { 
 
-remoteVideo.addEventListener('resize', () => {
-  console.log(`Remote video size changed to ${remoteVideo.videoWidth}x${remoteVideo.videoHeight}`);
-  // We'll use the first onsize callback as an indication that video has started
-  // playing out.
-  if (startTime) {
-    const elapsedTime = window.performance.now() - startTime;
-    console.log('Setup time: ' + elapsedTime.toFixed(3) + 'ms');
-    startTime = null;
-  }
-});
-
-let localStream;
-let pc1;
-let pc2;
-const offerOptions = {
-  offerToReceiveAudio: 1,
-  offerToReceiveVideo: 1
+   if (connectedUser) { 
+      message.name = connectedUser; 
+   } 
+	
+   connection.send(JSON.stringify(message)); 
 };
 
-function getName(pc) {
-  return (pc === pc1) ? 'pc1' : 'pc2';
+//setup a peer connection with another user 
+connectToOtherUsernameBtn.addEventListener("click", function () { 
+ 
+   var otherUsername = otherUsernameInput.value; 
+   connectedUser = otherUsername;
+	
+   if (otherUsername.length > 0) { 
+      //make an offer 
+      myConnection.createOffer(function (offer) { 
+         console.log(); 
+         send({ 
+            type: "offer", 
+            offer: offer 
+         });
+			
+         myConnection.setLocalDescription(offer); 
+      }, function (error) { 
+         alert("An error has occurred."); 
+      }); 
+   } 
+}); 
+ 
+//when somebody wants to call us 
+function onOffer(offer, name) { 
+   connectedUser = name; 
+   myConnection.setRemoteDescription(new RTCSessionDescription(offer)); 
+	
+   myConnection.createAnswer(function (answer) { 
+      myConnection.setLocalDescription(answer); 
+		
+      send({ 
+         type: "answer", 
+         answer: answer 
+      }); 
+		
+   }, function (error) { 
+      alert("oops...error"); 
+   }); 
 }
-
-function getOtherPc(pc) {
-  return (pc === pc1) ? pc2 : pc1;
-}
-
-async function start() {
-  console.log('Requesting local stream');
-  startButton.disabled = true;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true});
-    console.log('Received local stream');
-    localVideo.srcObject = stream;
-    localStream = stream;
-    callButton.disabled = false;
-  } catch (e) {
-    alert(`getUserMedia() error: ${e.name}`);
-  }
-}
-
-function getSelectedSdpSemantics() {
-  const sdpSemanticsSelect = document.querySelector('#sdpSemantics');
-  const option = sdpSemanticsSelect.options[sdpSemanticsSelect.selectedIndex];
-  return option.value === '' ? {} : {sdpSemantics: option.value};
-}
-
-async function call() {
-  callButton.disabled = true;
-  hangupButton.disabled = false;
-  console.log('Starting call');
-  startTime = window.performance.now();
-  const videoTracks = localStream.getVideoTracks();
-  const audioTracks = localStream.getAudioTracks();
-  if (videoTracks.length > 0) {
-    console.log(`Using video device: ${videoTracks[0].label}`);
-  }
-  if (audioTracks.length > 0) {
-    console.log(`Using audio device: ${audioTracks[0].label}`);
-  }
   
-//   const configuration = getSelectedSdpSemantics();
-var configuration = { iceServers: [{
-                          urls: "stun:stun.services.mozilla.com",
-                          username: "louis@mozilla.com", 
-                          credential: "webrtcdemo"
-                      }, {
-                          urls: [
-                                  "stun:stun.example.com",
-                                  "stun:stun-1.example.com"
-                          ]
-                      }]
-};
-
-  var pc = new RTCPeerConnection(configuration);
-  
-  console.log('RTCPeerConnection configuration:', configuration);
-  
-  pc1 = new RTCPeerConnection(configuration);
-  console.log('Created local peer connection object pc1');
-  
-  pc1.addEventListener('icecandidate', e => onIceCandidate(pc1, e));
-  pc1.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc1, e));
-  
-  pc2 = new RTCPeerConnection(configuration);
-  console.log('Created remote peer connection object pc2');
-  
-  pc2.addEventListener('icecandidate', e => onIceCandidate(pc2, e));
-  pc2.addEventListener('iceconnectionstatechange', e => onIceStateChange(pc2, e));
-  pc2.addEventListener('track', gotRemoteStream);
-
-  localStream.getTracks().forEach(track => pc1.addTrack(track, localStream));
-  console.log('Added local stream to pc1');
-
-  try {
-    console.log('pc1 createOffer start');
-    const offer = await pc1.createOffer(offerOptions);
-    await onCreateOfferSuccess(offer);
-  } catch (e) {
-    onCreateSessionDescriptionError(e);
-  }
-}
-
-function onCreateSessionDescriptionError(error) {
-  console.log(`Failed to create session description: ${error.toString()}`);
-}
-
-async function onCreateOfferSuccess(desc) {
-  console.log(`Offer from pc1\n${desc.sdp}`);
-  console.log('pc1 setLocalDescription start');
-  try {
-    await pc1.setLocalDescription(desc);
-    onSetLocalSuccess(pc1);
-  } catch (e) {
-    onSetSessionDescriptionError();
-  }
-
-  console.log('pc2 setRemoteDescription start');
-  try {
-    await pc2.setRemoteDescription(desc);
-    onSetRemoteSuccess(pc2);
-  } catch (e) {
-    onSetSessionDescriptionError();
-  }
-
-  console.log('pc2 createAnswer start');
-  // Since the 'remote' side has no media stream we need
-  // to pass in the right constraints in order for it to
-  // accept the incoming offer of audio and video.
-  try {
-    const answer = await pc2.createAnswer();
-    await onCreateAnswerSuccess(answer);
-  } catch (e) {
-    onCreateSessionDescriptionError(e);
-  }
-}
-
-function onSetLocalSuccess(pc) {
-  console.log(`${getName(pc)} setLocalDescription complete`);
-}
-
-function onSetRemoteSuccess(pc) {
-  console.log(`${getName(pc)} setRemoteDescription complete`);
-}
-
-function onSetSessionDescriptionError(error) {
-  console.log(`Failed to set session description: ${error.toString()}`);
-}
-
-function gotRemoteStream(e) {
-  if (remoteVideo.srcObject !== e.streams[0]) {
-    remoteVideo.srcObject = e.streams[0];
-    console.log('pc2 received remote stream');
-  }
-}
-
-async function onCreateAnswerSuccess(desc) {
-  console.log(`Answer from pc2:\n${desc.sdp}`);
-  console.log('pc2 setLocalDescription start');
-  try {
-    await pc2.setLocalDescription(desc);
-    onSetLocalSuccess(pc2);
-  } catch (e) {
-    onSetSessionDescriptionError(e);
-  }
-  console.log('pc1 setRemoteDescription start');
-  try {
-    await pc1.setRemoteDescription(desc);
-    onSetRemoteSuccess(pc1);
-  } catch (e) {
-    onSetSessionDescriptionError(e);
-  }
-}
-
-async function onIceCandidate(pc, event) {
-  try {
-    await (getOtherPc(pc).addIceCandidate(event.candidate));
-    onAddIceCandidateSuccess(pc);
-  } catch (e) {
-    onAddIceCandidateError(pc, e);
-  }
-  console.log(`${getName(pc)} ICE candidate:\n${event.candidate ? event.candidate.candidate : '(null)'}`);
-}
-
-function onAddIceCandidateSuccess(pc) {
-  console.log(`${getName(pc)} addIceCandidate success`);
-}
-
-function onAddIceCandidateError(pc, error) {
-  console.log(`${getName(pc)} failed to add ICE Candidate: ${error.toString()}`);
-}
-
-function onIceStateChange(pc, event) {
-  if (pc) {
-    console.log(`${getName(pc)} ICE state: ${pc.iceConnectionState}`);
-    console.log('ICE state change event: ', event);
-  }
-}
-
-function hangup() {
-  console.log('Ending call');
-  pc1.close();
-  pc2.close();
-  pc1 = null;
-  pc2 = null;
-  hangupButton.disabled = true;
-  callButton.disabled = false;
-}
+//when another user answers to our offer 
+function onAnswer(answer) { 
+   myConnection.setRemoteDescription(new RTCSessionDescription(answer)); 
+} 
+ 
+//when we got ice candidate from another user 
+function onCandidate(candidate) { 
+   myConnection.addIceCandidate(new RTCIceCandidate(candidate)); 
+}	
