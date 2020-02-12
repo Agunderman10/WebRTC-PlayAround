@@ -91,13 +91,9 @@ async function call() {
   }
   
 //   const configuration = getSelectedSdpSemantics();
-//   const configuration1 = { 
-//          "iceServers": [{ "url": "stun:stun1.l.google.com:19302" }] 
-//   }; 
-  const stream = await navigator.mediaDevices.getUserMedia({audio: true, video: true});
-    console.log('Received local stream');
-    localVideo.srcObject = stream;
-  const configuration1 = stream;
+  const configuration1 = { 
+         "iceServers": [{ "url": "http://localhost:9000/" }] 
+  }; 
   
   const configuration2 = { 
          "iceServers": [{ "url": "stun:stun2.l.google.com:19302" }] 
